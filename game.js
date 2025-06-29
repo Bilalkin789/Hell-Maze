@@ -1,3 +1,4 @@
+// تم تحديث روابط الصور لتضمن تحميلها بشكل موثوق
 const config = {
   type: Phaser.AUTO,
   width: window.innerWidth,
@@ -33,11 +34,12 @@ let jumpCount = 0;
 const maxJumps = 2;
 
 function preload() {
-  this.load.image('ground', 'https://i.imgur.com/3p640KC.png');
-  this.load.image('platform', 'https://i.imgur.com/3p640KC.png');
-  this.load.spritesheet('player', 'https://i.imgur.com/Adb6pKq.png', { frameWidth: 32, frameHeight: 48 });
-  this.load.image('spike', 'https://i.imgur.com/UcJy8RY.png');
-  this.load.image('star', 'https://i.imgur.com/sz7H6Ag.png');
+  // صور مضمّنة روابطها مستقرة
+  this.load.image('ground', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/platform.png');
+  this.load.image('platform', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/platform.png');
+  this.load.spritesheet('player', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/dude.png', { frameWidth: 32, frameHeight: 48 });
+  this.load.image('spike', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/spikes.png');
+  this.load.image('star', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/star.png');
 }
 
 function create() {
