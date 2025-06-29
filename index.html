@@ -1,27 +1,419 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="UTF-8" />
-  <title>Hell Maze - لعبة منصة متطورة</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
-  <style>
-    body {
-      margin: 0;
-      background: linear-gradient(#5a8dde, #2a4c71);
-      direction: rtl;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      overflow: hidden;
-    }
-    #gameContainer {
-      margin: auto;
-      display: block;
-      width: 100vw;
-      height: 100vh;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>Hell Maze - لعبة منصة احترافية</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js"></script>
+<style>
+  body {
+    margin: 0;
+    background: linear-gradient(#2c3e50, #3498db);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #fff;
+    overflow: hidden;
+  }
+  #game-container {
+    margin: auto;
+    width: 100vw;
+    height: 100vh;
+    touch-action: none;
+    -webkit-user-select: none; 
+    user-select: none;
+  }
+  /* أزرار التحكم */
+  .btn {
+    position: fixed;
+    bottom: 15px;
+    background: rgba(0,0,0,0.5);
+    border-radius: 50%;
+    width: 60px; height: 60px;
+    font-size: 32px;
+    color: white;
+    line-height: 60px;
+    text-align: center;
+    user-select: none;
+    z-index: 1000;
+  }
+  #btn-left { left: 20px; }
+  #btn-right { left: 90px; }
+  #btn-jump { right: 30px; bottom: 40px; width: 80px; height: 80px; font-size: 36px; line-height: 80px; }
+  /* شاشة اختيار المرحلة */
+  #level-select {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    gap: 20px;
+    padding: 20px;
+    z-index: 2000;
+  }
+  .level-btn {
+    width: 100px;
+    height: 100px;
+    background: #2980b9;
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    cursor: pointer;
+    transition: background 0.3s;
+    user-select: none;
+  }
+  .level-btn:hover {
+    background: #3498db;
+  }
+  .locked {
+    background: #7f8c8d !important;
+    cursor: not-allowed;
+  }
+  #score-display {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    font-size: 20px;
+    z-index: 1000;
+    background: rgba(0,0,0,0.5);
+    padding: 8px 15px;
+    border-radius: 12px;
+  }
+</style>
 </head>
 <body>
-  <div id="gameContainer"></div>
-  <script src="game.js"></script>
+<div id="game-container"></div>
+
+<!-- أزرار التحكم -->
+<div id="btn-left" class="btn">⬅️</div>
+<div id="btn-right" class="btn">➡️</div>
+<div id="btn-jump" class="btn">⬆️</div>
+
+<!-- شاشة اختيار المستوى -->
+<div id="level-select"></div>
+
+<!-- عرض النقاط -->
+<div id="score-display" style="display:none;">النقاط: 0</div>
+
+<script>
+(()=>{
+  const config = {
+    type: Phaser.AUTO,
+    parent: 'game-container',
+    width: window.innerWidth,
+    height: window.innerHeight,
+    physics: {
+      default: 'arcade',
+      arcade: {
+        gravity: { y: 900 },
+        debug: false,
+      }
+    },
+    scene: {
+      preload: preload,
+      create: create,
+      update: update,
+    }
+  };
+
+  const game = new Phaser.Game(config);
+
+  // متغيرات اللعبة
+  let player, cursors, platforms, spikes, stars, scoreText;
+  let score = 0;
+  let jumpCount = 0;
+  const maxJumps = 2;
+  let gameOver = false;
+
+  // التحكم اللمسي
+  let leftBtn = document.getElementById('btn-left');
+  let rightBtn = document.getElementById('btn-right');
+  let jumpBtn = document.getElementById('btn-jump');
+
+  let moveLeft=false, moveRight=false, jumpPressed=false;
+
+  // مستويات بصيغة بسيطة: كل مستوى له إعدادات خاصة بالعقبات وتوزيع النجوم
+  const levels = [
+    { platforms: [ {x:400,y:580,scale:2}, {x:600,y:450}, {x:50,y:350}, {x:750,y:300}, {x:400,y:200} ],
+      spikes: [ {x:300,y:565}, {x:500,y:565} ],
+      stars: [ {x:100,y:0}, {x:240,y:0}, {x:380,y:0}, {x:520,y:0} ],
+      goalX: 770,
+      goalY: 140,
+      stepsLimit: 0 // غير مستخدم حاليا
+    },
+    { platforms: [ {x:400,y:580,scale:2}, {x:200,y:460}, {x:450,y:380}, {x:700,y:280}, {x:550,y:200} ],
+      spikes: [ {x:250,y:565}, {x:500,y:565}, {x:670,y:565} ],
+      stars: [ {x:150,y:0}, {x:300,y:0}, {x:450,y:0} ],
+      goalX: 720,
+      goalY: 250,
+      stepsLimit: 0
+    },
+    { platforms: [ {x:400,y:580,scale:2}, {x:300,y:450}, {x:600,y:350}, {x:400,y:270}, {x:750,y:210} ],
+      spikes: [ {x:350,y:565}, {x:500,y:565}, {x:670,y:565}, {x:720,y:565} ],
+      stars: [ {x:120,y:0}, {x:300,y:0}, {x:480,y:0}, {x:660,y:0} ],
+      goalX: 730,
+      goalY: 190,
+      stepsLimit: 0
+    }
+  ];
+
+  let currentLevel = 0;
+
+  // لتخزين التقدم في localStorage
+  function saveProgress(){
+    localStorage.setItem('hellmaze-level', currentLevel);
+    localStorage.setItem('hellmaze-score', score);
+  }
+  function loadProgress(){
+    let lvl = parseInt(localStorage.getItem('hellmaze-level'));
+    let scr = parseInt(localStorage.getItem('hellmaze-score'));
+    if(!isNaN(lvl)) currentLevel = lvl;
+    if(!isNaN(scr)) score = scr;
+  }
+
+  // عناصر اللعبة
+  let starsGroup;
+  let spikesGroup;
+  let goalFlag;
+
+  // الصوتيات
+  let jumpSound, starSound, hitSound, bgMusic;
+
+  // شاشة اختيار المستوى
+  const levelSelectDiv = document.getElementById('level-select');
+  const scoreDisplay = document.getElementById('score-display');
+
+  // عرض شاشة اختيار المستوى
+  function showLevelSelect(){
+    levelSelectDiv.style.display = 'flex';
+    levelSelectDiv.innerHTML = '';
+    for(let i=0; i<levels.length; i++){
+      const btn = document.createElement('div');
+      btn.classList.add('level-btn');
+      btn.textContent = (i+1);
+      if(i>currentLevel) btn.classList.add('locked');
+      btn.onclick = ()=>{
+        if(i<=currentLevel){
+          startLevel(i);
+          levelSelectDiv.style.display='none';
+          scoreDisplay.style.display = 'block';
+        }
+      };
+      levelSelectDiv.appendChild(btn);
+    }
+  }
+
+  function preload(){
+    this.load.image('ground', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/platform.png');
+    this.load.image('platform', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/platform.png');
+    this.load.spritesheet('player', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/dude.png', { frameWidth: 32, frameHeight: 48 });
+    this.load.image('spike', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/spikes.png');
+    this.load.image('star', 'https://raw.githubusercontent.com/photonstorm/phaser3-examples/master/public/assets/sprites/star.png');
+
+    // أصوات (روابط مجانية)، يمكنك استبدالها لاحقاً
+    this.load.audio('jump', 'https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg');
+    this.load.audio('star', 'https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg');
+    this.load.audio('hit', 'https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg');
+    this.load.audio('bgmusic', 'https://cdn.pixabay.com/download/audio/2022/03/31/audio_95d38b93bf.mp3?filename=retro-video-game-loop-10902.mp3');
+  }
+
+  function create(){
+    loadProgress();
+
+    // الموسيقى الخلفية
+    bgMusic = this.sound.add('bgmusic', { volume: 0.05, loop:true });
+    bgMusic.play();
+
+    jumpSound = this.sound.add('jump', { volume: 0.3 });
+    starSound = this.sound.add('star', { volume: 0.3 });
+    hitSound = this.sound.add('hit', { volume: 0.4 });
+
+    cursors = this.input.keyboard.createCursorKeys();
+
+    platforms = this.physics.add.staticGroup();
+    starsGroup = this.physics.add.group();
+    spikesGroup = this.physics.add.staticGroup();
+
+    // اللاعب
+    player = this.physics.add.sprite(100, 450, 'player').setScale(1.1);
+    player.setBounce(0.1);
+    player.setCollideWorldBounds(true);
+
+    // رسومات اللاعب
+    this.anims.create({ key: 'left', frames: this.anims.generateFrameNumbers('player', { start: 0, end: 3 }), frameRate: 10, repeat: -1 });
+    this.anims.create({ key: 'turn', frames: [ { key: 'player', frame: 4 } ], frameRate: 20 });
+    this.anims.create({ key: 'right', frames: this.anims.generateFrameNumbers('player', { start: 5, end: 8 }), frameRate: 10, repeat: -1 });
+
+    // أزرار التحكم اللمسي
+    leftBtn.addEventListener('touchstart', ()=>moveLeft=true);
+    leftBtn.addEventListener('touchend', ()=>moveLeft=false);
+    leftBtn.addEventListener('mousedown', ()=>moveLeft=true);
+    leftBtn.addEventListener('mouseup', ()=>moveLeft=false);
+
+    rightBtn.addEventListener('touchstart', ()=>moveRight=true);
+    rightBtn.addEventListener('touchend', ()=>moveRight=false);
+    rightBtn.addEventListener('mousedown', ()=>moveRight=true);
+    rightBtn.addEventListener('mouseup', ()=>moveRight=false);
+
+    jumpBtn.addEventListener('touchstart', ()=>{
+      if(!jumpPressed) {
+        jumpPressed = true;
+        jumpSound.play();
+        jump();
+      }
+    });
+    jumpBtn.addEventListener('touchend', ()=>jumpPressed=false);
+    jumpBtn.addEventListener('mousedown', ()=>{
+      if(!jumpPressed) {
+        jumpPressed = true;
+        jumpSound.play();
+        jump();
+      }
+    });
+    jumpBtn.addEventListener('mouseup', ()=>jumpPressed=false);
+
+    // بدء المستوى الحالي
+    startLevel(currentLevel);
+  }
+
+  function startLevel(levelNo){
+    gameOver = false;
+    jumpCount = 0;
+    scoreText = scoreDisplay;
+
+    // تهيئة العناصر
+    platforms.clear(true, true);
+    starsGroup.clear(true, true);
+    spikesGroup.clear(true, true);
+
+    // بناء المنصات
+    levels[levelNo].platforms.forEach(p=>{
+      if(p.scale) {
+        platforms.create(p.x, p.y, 'ground').setScale(p.scale).refreshBody();
+      } else {
+        platforms.create(p.x, p.y, 'platform').refreshBody();
+      }
+    });
+
+    // بناء العقبات
+    levels[levelNo].spikes.forEach(s=>{
+      spikesGroup.create(s.x, s.y, 'spike');
+    });
+
+    // بناء النجوم
+    levels[levelNo].stars.forEach(s=>{
+      let star = starsGroup.create(s.x, s.y, 'star');
+      star.setBounceY(Phaser.Math.FloatBetween(0.3, 0.6));
+    });
+
+    // هدف الوصول: كور اخضر (مربع صغير لمستوى متقدم يمكن تغييره)
+    if(goalFlag) goalFlag.destroy();
+    goalFlag = game.scene.scenes[0].add.rectangle(levels[levelNo].goalX, levels[levelNo].goalY, 40, 40, 0x00ff00, 0.5);
+    game.scene.scenes[0].physics.add.existing(goalFlag, true);
+
+    // اصطدامات وأحداث
+    game.scene.scenes[0].physics.add.collider(player, platforms);
+    game.scene.scenes[0].physics.add.collider(starsGroup, platforms);
+    game.scene.scenes[0].physics.add.collider(spikesGroup, platforms);
+    game.scene.scenes[0].physics.add.overlap(player, starsGroup, collectStar, null, game.scene.scenes[0]);
+    game.scene.scenes[0].physics.add.overlap(player, spikesGroup, hitSpike, null, game.scene.scenes[0]);
+    game.scene.scenes[0].physics.add.overlap(player, goalFlag, reachGoal, null, game.scene.scenes[0]);
+
+    // بدء موقع اللاعب
+    player.setPosition(100, 450);
+
+    // إظهار النقاط والشاشة
+    scoreDisplay.style.display = 'block';
+    scoreText.textContent = 'النقاط: ' + score;
+  }
+
+  function update(){
+    if(gameOver) return;
+
+    // تحكم اللاعب يمين ويسار
+    if(moveLeft || (cursors.left.isDown)){
+      player.setVelocityX(-170);
+      player.anims.play('left', true);
+    }
+    else if(moveRight || (cursors.right.isDown)){
+      player.setVelocityX(170);
+      player.anims.play('right', true);
+    }
+    else {
+      player.setVelocityX(0);
+      player.anims.play('turn');
+    }
+
+    // القفز
+    if((jumpPressed || cursors.up.isDown) && jumpCount < maxJumps && player.body.touching.down){
+      jump();
+    }
+
+    // إعادة عد القفزات عند لمس الأرض
+    if(player.body.touching.down){
+      jumpCount = 0;
+    }
+  }
+
+  function jump(){
+    if(jumpCount >= maxJumps) return;
+    player.setVelocityY(-480);
+    jumpCount++;
+  }
+
+  function collectStar(player, star){
+    star.disableBody(true,true);
+    score += 10;
+    scoreText.textContent = 'النقاط: ' + score;
+    starSound.play();
+  }
+
+  function hitSpike(player, spike){
+    if(gameOver) return;
+    hitSound.play();
+    gameOver = true;
+    player.setTint(0xff0000);
+    player.anims.play('turn');
+    game.scene.scenes[0].physics.pause();
+
+    setTimeout(()=>{
+      game.scene.scenes[0].physics.resume();
+      player.clearTint();
+      startLevel(currentLevel);
+      gameOver = false;
+    }, 2000);
+  }
+
+  function reachGoal(player, goal){
+    if(gameOver) return;
+    gameOver = true;
+    player.setVelocityX(0);
+    score += 50;
+    scoreText.textContent = 'النقاط: ' + score;
+
+    currentLevel++;
+    if(currentLevel >= levels.length){
+      alert('مبروك! أكملت كل المستويات.');
+      currentLevel = 0;
+      score = 0;
+    } else {
+      alert('مبروك! انتقل للمستوى التالي.');
+    }
+    saveProgress();
+    game.scene.scenes[0].physics.pause();
+
+    setTimeout(()=>{
+      game.scene.scenes[0].physics.resume();
+      startLevel(currentLevel);
+      gameOver = false;
+    }, 1500);
+  }
+
+  // عرض شاشة اختيار المستوى عند بدء الصفحة
+  showLevelSelect();
+
+})();
+</script>
 </body>
 </html>
